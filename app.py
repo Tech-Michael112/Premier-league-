@@ -1,14 +1,58 @@
 from flask import Flask, render_template, request, jsonify, send_file
 import json
+import csv
 from collections import Counter
 import io
-import csv
 
 app = Flask(__name__)
 
+def parse_file(file):
+    """Parse either JSON or CSV file and return list of teams"""
+    filename = file.filename.lower()
+    
+    if filename.endswith('.json'):
+        return json.load(file)
+    elif filename.endswith('.csv'):
+        # Parse CSV file
+        content = file.read().decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(content))
+        teams = []
+        
+        for row in csv_reader:
+            # Build players list from CSV columns
+            players = []
+            for i in range(1, 12):  # 11 players
+                player_id = row.get(f'P{i}_ID')
+                if player_id:
+                    players.append({
+                        'position': int(row.get(f'P{i}_Pos', i)),
+                        'player_id': int(player_id),
+                        'player_name': row.get(f'P{i}_Name', 'Unknown'),
+                        'web_name': row.get(f'P{i}_WebName', 'Unknown'),
+                        'element_type': int(row.get(f'P{i}_Type', 0)),
+                        'is_captain': row.get(f'P{i}_Captain', '').lower() == 'true',
+                        'is_vice_captain': row.get(f'P{i}_Vice', '').lower() == 'true',
+                        'multiplier': int(row.get(f'P{i}_Multiplier', 1))
+                    })
+            
+            teams.append({
+                'rank': int(row.get('Rank', 0)),
+                'last_rank': int(row.get('Last_Rank', 0)),
+                'team_name': row.get('Team_Name', ''),
+                'manager_name': row.get('Manager_Name', ''),
+                'entry_id': int(row.get('Entry_ID', 0)),
+                'total_points': int(row.get('Total_Points', 0)),
+                'event_points': int(row.get('Event_Points', 0)),
+                'players': players
+            })
+        
+        return teams
+    else:
+        raise ValueError('Unsupported file format. Please upload JSON or CSV files.')
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index_new.html')
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -20,9 +64,9 @@ def analyze():
         gw1_file = request.files['gw1_file']
         gw2_file = request.files['gw2_file']
         
-        # Parse JSON
-        gw1_data = json.load(gw1_file)
-        gw2_data = json.load(gw2_file)
+        # Parse files (supports both JSON and CSV)
+        gw1_data = parse_file(gw1_file)
+        gw2_data = parse_file(gw2_file)
         
         # Create Entry ID lookups
         gw1_lookup = {team['entry_id']: team for team in gw1_data}
