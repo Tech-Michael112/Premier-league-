@@ -171,6 +171,8 @@
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
         
         .analyze-btn:hover:not(:disabled) {
@@ -178,10 +180,15 @@
             box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
         }
         
+        .analyze-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
         .analyze-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
+            background: #475569;
         }
         
         /* Loading State */
@@ -472,7 +479,7 @@
             
             <button class="analyze-btn" id="analyze-btn" disabled>
                 <i class="fas fa-chart-line"></i>
-                Analyze Transfers
+                <span>Analyze Transfers</span>
             </button>
         </div>
         
@@ -607,10 +614,24 @@
         });
         
         function checkFilesReady() {
-            document.getElementById('analyze-btn').disabled = !(file1 && file2);
+            const btn = document.getElementById('analyze-btn');
+            const ready = !!(file1 && file2);
+            btn.disabled = !ready;
+            
+            if (ready) {
+                btn.style.background = 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))';
+            } else {
+                btn.style.background = '#475569';
+            }
         }
         
         document.getElementById('analyze-btn').addEventListener('click', analyzeTransfers);
+        document.getElementById('analyze-btn').addEventListener('touchend', function(e) {
+            e.preventDefault();
+            if (!this.disabled) {
+                analyzeTransfers();
+            }
+        });
         
         async function analyzeTransfers() {
             const formData = new FormData();
