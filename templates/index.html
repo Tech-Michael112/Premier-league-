@@ -191,26 +191,75 @@
             background: #475569;
         }
         
-        /* Loading State */
+        /* Loading State - Terminal Style */
         .loading {
             display: none;
-            text-align: center;
-            padding: 3rem;
             background: var(--bg-light);
             border-radius: 12px;
             border: 1px solid var(--border-color);
             margin-bottom: 2rem;
+            overflow: hidden;
         }
         
         .loading.active {
             display: block;
         }
         
-        .spinner {
-            width: 50px;
-            height: 50px;
-            margin: 0 auto 1.5rem;
-            border: 4px solid var(--border-color);
+        .loading-header {
+            background: var(--bg-card);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .loading-header i {
+            color: var(--accent-primary);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading-body {
+            padding: 1.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+            color: var(--text-secondary);
+        }
+        
+        .progress-step.active {
+            color: var(--text-primary);
+        }
+        
+        .progress-step.complete {
+            color: var(--success);
+        }
+        
+        .progress-step.error {
+            color: var(--error);
+        }
+        
+        .step-icon {
+            width: 20px;
+            text-align: center;
+        }
+        
+        .step-spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--border-color);
             border-top-color: var(--accent-primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
@@ -220,12 +269,26 @@
             to { transform: rotate(360deg); }
         }
         
-        .loading h2 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
+        .progress-bar-container {
+            margin-top: 1rem;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            overflow: hidden;
+            height: 8px;
         }
         
-        .loading p {
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-stats {
+            margin-top: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
             color: var(--text-secondary);
         }
         
@@ -484,9 +547,45 @@
         </div>
         
         <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <h2>Processing Data</h2>
-            <p>Analyzing transfer patterns across all teams...</p>
+            <div class="loading-header">
+                <i class="fas fa-terminal"></i>
+                <h2 style="margin: 0; font-size: 1.1rem;">Processing Analysis</h2>
+            </div>
+            <div class="loading-body">
+                <div class="progress-step" id="step-validate">
+                    <span class="step-icon"><i class="fas fa-circle" style="font-size: 0.5rem;"></i></span>
+                    <span>Validating uploaded files...</span>
+                </div>
+                <div class="progress-step" id="step-parse">
+                    <span class="step-icon"><i class="fas fa-circle" style="font-size: 0.5rem;"></i></span>
+                    <span>Parsing file data...</span>
+                </div>
+                <div class="progress-step" id="step-match">
+                    <span class="step-icon"><i class="fas fa-circle" style="font-size: 0.5rem;"></i></span>
+                    <span>Matching teams across gameweeks...</span>
+                </div>
+                <div class="progress-step" id="step-analyze">
+                    <span class="step-icon"><i class="fas fa-circle" style="font-size: 0.5rem;"></i></span>
+                    <span>Analyzing transfer patterns...</span>
+                </div>
+                <div class="progress-step" id="step-calculate">
+                    <span class="step-icon"><i class="fas fa-circle" style="font-size: 0.5rem;"></i></span>
+                    <span>Calculating player frequencies...</span>
+                </div>
+                <div class="progress-step" id="step-complete">
+                    <span class="step-icon"><i class="fas fa-circle" style="font-size: 0.5rem;"></i></span>
+                    <span>Generating results...</span>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                
+                <div class="progress-stats">
+                    <span id="progress-text">Starting analysis...</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+            </div>
         </div>
         
         <div class="error" id="error">
@@ -555,6 +654,52 @@
     <script>
         let file1 = null;
         let file2 = null;
+        let wakeLock = null;
+        
+        // Prevent screen sleep during analysis
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.log('Wake Lock not supported');
+            }
+        }
+        
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+        
+        // Progress tracking
+        function updateProgress(step, percent, text) {
+            const steps = ['validate', 'parse', 'match', 'analyze', 'calculate', 'complete'];
+            const currentIndex = steps.indexOf(step);
+            
+            // Update step statuses
+            steps.forEach((s, index) => {
+                const el = document.getElementById(`step-${s}`);
+                if (index < currentIndex) {
+                    el.classList.remove('active');
+                    el.classList.add('complete');
+                    el.querySelector('.step-icon').innerHTML = '<i class="fas fa-check"></i>';
+                } else if (index === currentIndex) {
+                    el.classList.add('active');
+                    el.querySelector('.step-icon').innerHTML = '<span class="step-spinner"></span>';
+                } else {
+                    el.classList.remove('active', 'complete');
+                    el.querySelector('.step-icon').innerHTML = '<i class="fas fa-circle" style="font-size: 0.5rem;"></i>';
+                }
+            });
+            
+            // Update progress bar
+            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('progress-percent').textContent = Math.round(percent) + '%';
+            document.getElementById('progress-text').textContent = text;
+        }
         
         // Format file size
         function formatFileSize(bytes) {
@@ -634,6 +779,9 @@
         });
         
         async function analyzeTransfers() {
+            // Request wake lock to keep processing in background
+            await requestWakeLock();
+            
             const formData = new FormData();
             formData.append('gw1_file', file1);
             formData.append('gw2_file', file2);
@@ -643,22 +791,50 @@
             document.getElementById('error').classList.remove('active');
             
             try {
+                // Step 1: Validate
+                updateProgress('validate', 10, 'Validating files...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Step 2: Parse
+                updateProgress('parse', 20, 'Uploading and parsing data...');
+                
                 const response = await fetch('/analyze', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    keepalive: true  // Keep request alive even if page is backgrounded
                 });
+                
+                updateProgress('match', 40, 'Matching teams...');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                updateProgress('analyze', 60, 'Analyzing transfers...');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                updateProgress('calculate', 80, 'Calculating frequencies...');
                 
                 const data = await response.json();
                 
+                updateProgress('complete', 95, 'Finalizing results...');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
                 if (data.success) {
-                    displayResults(data);
+                    updateProgress('complete', 100, 'Complete!');
+                    setTimeout(() => {
+                        displayResults(data);
+                        releaseWakeLock();
+                    }, 500);
                 } else {
-                    showError(data.error);
+                    showError(data.error || 'Analysis failed');
+                    releaseWakeLock();
                 }
             } catch (error) {
-                showError('Failed to analyze files. Please try again.');
+                console.error('Analysis error:', error);
+                showError('Failed to analyze files. Please check your connection and try again.');
+                releaseWakeLock();
             } finally {
-                document.getElementById('loading').classList.remove('active');
+                setTimeout(() => {
+                    document.getElementById('loading').classList.remove('active');
+                }, 500);
             }
         }
         
