@@ -52,21 +52,34 @@ def parse_file(file):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index_new.html')
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
         # Get uploaded files
         if 'gw1_file' not in request.files or 'gw2_file' not in request.files:
-            return jsonify({'error': 'Please upload both gameweek files'}), 400
+            return jsonify({'success': False, 'error': 'Please upload both gameweek files'}), 400
         
         gw1_file = request.files['gw1_file']
         gw2_file = request.files['gw2_file']
         
+        print(f"Parsing GW1 file: {gw1_file.filename}")
+        
         # Parse files (supports both JSON and CSV)
-        gw1_data = parse_file(gw1_file)
-        gw2_data = parse_file(gw2_file)
+        try:
+            gw1_data = parse_file(gw1_file)
+            print(f"GW1 parsed: {len(gw1_data)} teams")
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Error parsing first file: {str(e)}'}), 400
+        
+        print(f"Parsing GW2 file: {gw2_file.filename}")
+        
+        try:
+            gw2_data = parse_file(gw2_file)
+            print(f"GW2 parsed: {len(gw2_data)} teams")
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Error parsing second file: {str(e)}'}), 400
         
         # Create Entry ID lookups
         gw1_lookup = {team['entry_id']: team for team in gw1_data}
@@ -177,7 +190,13 @@ def analyze():
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Analysis error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# Increase max content length for large files (200MB)
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
