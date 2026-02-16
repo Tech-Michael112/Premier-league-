@@ -793,48 +793,50 @@
             try {
                 // Step 1: Validate
                 updateProgress('validate', 10, 'Validating files...');
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 300));
                 
-                // Step 2: Parse
-                updateProgress('parse', 20, 'Uploading and parsing data...');
+                // Step 2: Parse (this is the long part)
+                updateProgress('parse', 20, `Uploading ${file1.name} and ${file2.name}...`);
                 
+                // No timeout - let it run as long as needed
                 const response = await fetch('/analyze', {
                     method: 'POST',
-                    body: formData,
-                    keepalive: true  // Keep request alive even if page is backgrounded
+                    body: formData
                 });
                 
-                updateProgress('match', 40, 'Matching teams...');
-                await new Promise(resolve => setTimeout(resolve, 300));
+                updateProgress('match', 40, 'Processing response...');
+                
+                const data = await response.json();
+                
+                // Check if there's an error
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || `Server returned ${response.status}`);
+                }
                 
                 updateProgress('analyze', 60, 'Analyzing transfers...');
                 await new Promise(resolve => setTimeout(resolve, 300));
                 
                 updateProgress('calculate', 80, 'Calculating frequencies...');
-                
-                const data = await response.json();
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 updateProgress('complete', 95, 'Finalizing results...');
-                await new Promise(resolve => setTimeout(resolve, 300));
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
-                if (data.success) {
-                    updateProgress('complete', 100, 'Complete!');
-                    setTimeout(() => {
-                        displayResults(data);
-                        releaseWakeLock();
-                    }, 500);
-                } else {
-                    showError(data.error || 'Analysis failed');
+                updateProgress('complete', 100, 'Complete!');
+                
+                setTimeout(() => {
+                    displayResults(data);
+                    document.getElementById('loading').classList.remove('active');
                     releaseWakeLock();
-                }
+                }, 500);
+                
             } catch (error) {
                 console.error('Analysis error:', error);
-                showError('Failed to analyze files. Please check your connection and try again.');
+                document.getElementById('loading').classList.remove('active');
+                
+                // Show the actual error message
+                showError(error.message || 'Failed to analyze files. Please check the files and try again.');
                 releaseWakeLock();
-            } finally {
-                setTimeout(() => {
-                    document.getElementById('loading').classList.remove('active');
-                }, 500);
             }
         }
         
@@ -882,6 +884,9 @@
         function showError(message) {
             document.getElementById('error-message').textContent = message;
             document.getElementById('error').classList.add('active');
+            
+            // Scroll to error
+            document.getElementById('error').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         
         function switchTab(tab) {
